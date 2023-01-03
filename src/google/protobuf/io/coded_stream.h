@@ -655,10 +655,12 @@ class PROTOBUF_EXPORT EpsCopyOutputStream {
   // pointed to the end of the array. When using this the total size is already
   // known, so no need to maintain the slop region.
   EpsCopyOutputStream(void* data, int size, bool deterministic)
-      : end_(static_cast<uint8_t*>(data) + size),
+      : array_end_(static_cast<uint8_t*>(data) + size),
         buffer_end_(nullptr),
         stream_(nullptr),
-        is_serialization_deterministic_(deterministic) {}
+        is_serialization_deterministic_(deterministic) {
+    end_ = array_end_ - std::min<int>(kSlopBytes, size);
+  }
 
   // Initialize from stream but with the first buffer already given (eager).
   EpsCopyOutputStream(void* data, int size, ZeroCopyOutputStream* stream,
@@ -667,9 +669,19 @@ class PROTOBUF_EXPORT EpsCopyOutputStream {
     *pp = SetInitialBuffer(data, size);
   }
 
+  // Finlizes this instance. Invokes `Trim()` for stream bound instances and
+  // `FlushArray()` for array bound instances.
+  uint8_t* Finalize(uint8_t* ptr) {
+    return stream_ ? Trim(ptr) : FlushArray(ptr);
+  }
+
   // Flush everything that's written into the underlying ZeroCopyOutputStream
   // and trims the underlying stream to the location of ptr.
   uint8_t* Trim(uint8_t* ptr);
+
+  // Flushes any yet unwritten data into the array provided at construction.
+  // Returns a pointer directly beyond the last byte written into the array.
+  uint8_t* FlushArray(uint8_t* ptr);
 
   // After this it's guaranteed you can safely write kSlopBytes to ptr. This
   // will never fail! The underlying stream can produce an error. Use HadError
@@ -831,6 +843,7 @@ class PROTOBUF_EXPORT EpsCopyOutputStream {
 
 
  private:
+  uint8_t* array_end_ = nullptr;
   uint8_t* end_;
   uint8_t* buffer_end_ = buffer_;
   uint8_t buffer_[2 * kSlopBytes];
@@ -839,6 +852,8 @@ class PROTOBUF_EXPORT EpsCopyOutputStream {
   bool aliasing_enabled_ = false;  // See EnableAliasing().
   bool is_serialization_deterministic_;
   bool skip_check_consistency = false;
+
+  std::pair<uint8_t*, uint8_t*> ConsumeArray(uint8_t* ptr, int size);
 
   uint8_t* EnsureSpaceFallback(uint8_t* ptr);
   inline uint8_t* Next();
@@ -911,6 +926,21 @@ class PROTOBUF_EXPORT EpsCopyOutputStream {
 
   template <typename T>
   PROTOBUF_ALWAYS_INLINE static uint8_t* UnsafeVarint(T value, uint8_t* ptr) {
+    static_assert(std::is_unsigned<T>::value,
+                  "Varint serialization must be unsigned");
+#if defined(ADDRESS_SANITIZER) || defined(MEMORY_SANITIZER)
+    // Force the promise that we always have 'kSlopBytes` on serialization
+    // materializes here as well as 'we can always write up to 10 varint bytes`.
+    // Note that we write 0 values as CodedStream relies on zero init data in
+    // any slop buffers, but that is fine, we just want to trigger sanitizers.
+    memset(ptr, 0, 10);
+#endif
+    return UnsafeVarintClean(value, ptr);
+  }
+
+  template <typename T>
+  PROTOBUF_ALWAYS_INLINE static uint8_t* UnsafeVarintClean(T value,
+                                                           uint8_t* ptr) {
     static_assert(std::is_unsigned<T>::value,
                   "Varint serialization must be unsigned");
     while (PROTOBUF_PREDICT_FALSE(value >= 0x80)) {
@@ -1651,12 +1681,12 @@ inline void CodedOutputStream::InitEagerly(Stream* stream) {
 
 inline uint8_t* CodedOutputStream::WriteVarint32ToArray(uint32_t value,
                                                         uint8_t* target) {
-  return EpsCopyOutputStream::UnsafeVarint(value, target);
+  return EpsCopyOutputStream::UnsafeVarintClean(value, target);
 }
 
 inline uint8_t* CodedOutputStream::WriteVarint64ToArray(uint64_t value,
                                                         uint8_t* target) {
-  return EpsCopyOutputStream::UnsafeVarint(value, target);
+  return EpsCopyOutputStream::UnsafeVarintClean(value, target);
 }
 
 inline void CodedOutputStream::WriteVarint32SignExtended(int32_t value) {
