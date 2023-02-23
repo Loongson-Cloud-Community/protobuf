@@ -184,6 +184,8 @@ GOOGLE_PROTOBUF_ATOMICOPS_ERROR
 #include <google/protobuf/stubs/atomicops_internals_mips_gcc.h>
 #elif defined(__pnacl__)
 #include <google/protobuf/stubs/atomicops_internals_pnacl.h>
+#elif defined(GOOGLE_PROTOBUF_ARCH_LOONGARCH64)
+#include <google/protobuf/stubs/atomicops_internals_loongarch64_gcc.h>
 #else
 GOOGLE_PROTOBUF_ATOMICOPS_ERROR
 #endif
