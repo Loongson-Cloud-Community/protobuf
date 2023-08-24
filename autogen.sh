@@ -4,7 +4,7 @@
 # be included in the distribution.  These files are not checked in because they
 # are automatically generated.
 
-set -e
+set -ex
 
 # Check that we're being run from the right directory.
 if test ! -f src/google/protobuf/stubs/common.h; then
@@ -19,8 +19,9 @@ fi
 # directory is set up as an SVN external.
 if test ! -e gtest; then
   echo "Google Test not present.  Fetching gtest-1.3.0 from the web..."
-  curl http://googletest.googlecode.com/files/gtest-1.3.0.tar.bz2 | tar jx
-  mv gtest-1.3.0 gtest
+  #curl http://googletest.googlecode.com/files/gtest-1.3.0.tar.bz2 | tar jx
+  curl https://github.com/google/googletest/archive/release-1.3.0.tar.gz |tar jx
+  mv googletest-release-1.3.0 gtest
 fi
 
 set -ex

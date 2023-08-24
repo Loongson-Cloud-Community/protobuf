@@ -33,7 +33,7 @@
 //  Sanjay Ghemawat, Jeff Dean, and others.
 
 #include <google/protobuf/compiler/command_line_interface.h>
-
+#include <utility>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -910,7 +910,8 @@ bool CommandLineInterface::InterpretArgument(const string& name,
         cerr << disk_path << ": warning: directory does not exist." << endl;
       }
 
-      proto_path_.push_back(make_pair<string, string>(virtual_path, disk_path));
+         //proto_path_.push_back(make_pair<string, string>(std::__cxx11::string(virtual_path), std::__cxx11::string(disk_path)));
+        proto_path_.push_back(make_pair<string, string>(std::string(virtual_path), std::string(disk_path)));
     }
 
   } else if (name == "-o" || name == "--descriptor_set_out") {
